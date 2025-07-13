@@ -17,7 +17,8 @@ const videoRoutes = require('./routes/video');
 const giaodichRoutes = require('./routes/giaodich');
 const blogRoutes = require('./routes/blog');
 const uploadRoutes = require('./routes/upload');
-const documentRoutes = require('./routes/document');
+const settingsRoutes = require('./routes/settings');
+const newsRoutes = require('./routes/news');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,10 +81,9 @@ app.use('/api/khoahoc', khoahocRoutes);
 app.use('/api/video', videoRoutes);
 app.use('/api/giaodich', giaodichRoutes);
 app.use('/api/blog', blogRoutes);
-
-// New routes
 app.use('/api/uploads', uploadRoutes);
-app.use('/api/documents', documentRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/news', newsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -99,8 +99,7 @@ app.get('/', (req, res) => {
       videos: '/api/video',
       transactions: '/api/giaodich',
       blog: '/api/blog',
-      uploads: '/api/uploads',
-      documents: '/api/documents'
+      uploads: '/api/uploads'
     }
   });
 });
@@ -169,14 +168,6 @@ app.get('/api/docs', (req, res) => {
         uploadSingleVideo: 'POST /uploads/video (Admin only)',
         uploadSingleDocument: 'POST /uploads/document (Admin only)',
         uploadMultipleImages: 'POST /uploads/images (Admin only)'
-      },
-      documents: {
-        getAllDocuments: 'GET /documents',
-        getDocumentById: 'GET /documents/:id',
-        createDocument: 'POST /documents (Admin only)',
-        updateDocument: 'PUT /documents/:id (Admin only)',
-        deleteDocument: 'DELETE /documents/:id (Admin only)',
-        incrementDownload: 'POST /documents/:id/download'
       }
     },
     authentication: {

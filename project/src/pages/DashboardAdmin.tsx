@@ -7,10 +7,15 @@ import {
 import { 
   Users, BookOpen, DollarSign, TrendingUp, Award, 
   Calendar, Eye, Settings, Plus, Edit, Trash2, ChevronDown,
-  ChevronRight, Play, FileText, Upload, Palette, Image
+  ChevronRight, Play, FileText, Upload, Palette, Image, Video
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
+import FileUpload from '../components/common/FileUpload';
+import MediaLibrary from '../components/admin/MediaLibrary';
+import FileUploadField from '../components/admin/FileUploadField';
+import uploadService from '../services/upload';
+import settingsService from '../services/settings';
 
 interface Course {
   id: string;
@@ -50,6 +55,10 @@ const DashboardAdmin: React.FC = () => {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [mediaLibraryType, setMediaLibraryType] = useState<'images' | 'videos' | 'documents' | 'all'>('all');
+  const [currentUploadField, setCurrentUploadField] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
 
   // Form states
   const [courseForm, setCourseForm] = useState({
@@ -75,6 +84,107 @@ const DashboardAdmin: React.FC = () => {
     order: '',
     isFree: false
   });
+
+  // Upload states
+  const [uploadStates, setUploadStates] = useState({
+    video: { uploading: false, progress: 0, error: null },
+    image: { uploading: false, progress: 0, error: null },
+    document: { uploading: false, progress: 0, error: null }
+  });
+
+  // File upload handlers
+  const handleVideoUpload = async (file: File) => {
+    setUploadStates(prev => ({
+      ...prev,
+      video: { uploading: true, progress: 0, error: null }
+    }));
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/uploads/video', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setLessonForm(prev => ({
+          ...prev,
+          videoUrl: result.data.url
+        }));
+        setUploadStates(prev => ({
+          ...prev,
+          video: { uploading: false, progress: 100, error: null }
+        }));
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      setUploadStates(prev => ({
+        ...prev,
+        video: { uploading: false, progress: 0, error: error.message }
+      }));
+    }
+  };
+
+  const handleImageUpload = async (file: File, field: string) => {
+    setUploadStates(prev => ({
+      ...prev,
+      image: { uploading: true, progress: 0, error: null }
+    }));
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/uploads/image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        if (field === 'courseThumbnail') {
+          setCourseForm(prev => ({
+            ...prev,
+            thumbnail: result.data.url
+          }));
+        } else if (field === 'bannerImage') {
+          setWebsiteSettings(prev => ({
+            ...prev,
+            bannerImage: result.data.url
+          }));
+        } else if (field === 'logo') {
+          setWebsiteSettings(prev => ({
+            ...prev,
+            logo: result.data.url
+          }));
+        }
+        
+        setUploadStates(prev => ({
+          ...prev,
+          image: { uploading: false, progress: 100, error: null }
+        }));
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      setUploadStates(prev => ({
+        ...prev,
+        image: { uploading: false, progress: 0, error: error.message }
+      }));
+    }
+  };
 
   const [userForm, setUserForm] = useState({
     name: '',
@@ -239,6 +349,79 @@ const DashboardAdmin: React.FC = () => {
       newExpanded.add(chapterId);
     }
     setExpandedChapters(newExpanded);
+  };
+
+  // Upload helper functions
+  const handleFileUpload = async (file: File, type: 'images' | 'videos' | 'documents', fieldName: string) => {
+    try {
+      setUploadProgress(prev => ({ ...prev, [fieldName]: 0 }));
+      
+      let result;
+      const onProgress = (progress: any) => {
+        setUploadProgress(prev => ({ ...prev, [fieldName]: progress.percentage }));
+      };
+
+      // Use the appropriate upload method based on type
+      switch (type) {
+        case 'images':
+          result = await uploadService.uploadImage(file, onProgress);
+          break;
+        case 'videos':
+          result = await uploadService.uploadVideo(file, onProgress);
+          break;
+        case 'documents':
+          result = await uploadService.uploadDocument(file, onProgress);
+          break;
+        default:
+          throw new Error('Invalid file type');
+      }
+
+      if (result.success) {
+        // Update the appropriate form field
+        updateFormField(fieldName, result.data.url);
+        setUploadProgress(prev => ({ ...prev, [fieldName]: 100 }));
+        
+        // Clear progress after 2 seconds
+        setTimeout(() => {
+          setUploadProgress(prev => {
+            const newProgress = { ...prev };
+            delete newProgress[fieldName];
+            return newProgress;
+          });
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[fieldName];
+        return newProgress;
+      });
+    }
+  };
+
+  const updateFormField = (fieldName: string, value: string) => {
+    if (fieldName.startsWith('course.')) {
+      const field = fieldName.replace('course.', '');
+      setCourseForm(prev => ({ ...prev, [field]: value }));
+    } else if (fieldName.startsWith('lesson.')) {
+      const field = fieldName.replace('lesson.', '');
+      setLessonForm(prev => ({ ...prev, [field]: value }));
+    } else if (fieldName.startsWith('settings.')) {
+      const field = fieldName.replace('settings.', '');
+      setWebsiteSettings(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const openMediaLibrary = (type: 'images' | 'videos' | 'documents' | 'all', fieldName: string) => {
+    setMediaLibraryType(type);
+    setCurrentUploadField(fieldName);
+    setShowMediaLibrary(true);
+  };
+
+  const handleMediaSelect = (file: any) => {
+    updateFormField(currentUploadField, file.url);
+    setShowMediaLibrary(false);
   };
 
   const handleSaveCourse = () => {
@@ -995,18 +1178,16 @@ const DashboardAdmin: React.FC = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ảnh thumbnail
-              </label>
-              <input
-                type="url"
-                value={courseForm.thumbnail}
-                onChange={(e) => setCourseForm({...courseForm, thumbnail: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="URL ảnh thumbnail"
-              />
-            </div>
+            <FileUploadField
+              label="Ảnh thumbnail"
+              value={courseForm.thumbnail}
+              onChange={(url) => setCourseForm({...courseForm, thumbnail: url})}
+              type="images"
+              placeholder="URL ảnh thumbnail khóa học"
+              onUpload={(file) => handleFileUpload(file, 'images', 'course.thumbnail')}
+              uploadProgress={uploadProgress['course.thumbnail']}
+              showMediaLibrary={() => openMediaLibrary('images', 'course.thumbnail')}
+            />
 
             <div className="flex justify-end space-x-3 pt-4">
               <Button
@@ -1161,33 +1342,29 @@ const DashboardAdmin: React.FC = () => {
             </div>
 
             {lessonForm.type === 'video' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  URL Video *
-                </label>
-                <input
-                  type="url"
-                  value={lessonForm.videoUrl}
-                  onChange={(e) => setLessonForm({...lessonForm, videoUrl: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="https://example.com/video.mp4"
-                />
-              </div>
+              <FileUploadField
+                label="Video bài học"
+                value={lessonForm.videoUrl}
+                onChange={(url) => setLessonForm({...lessonForm, videoUrl: url})}
+                type="videos"
+                placeholder="URL video bài học"
+                onUpload={(file) => handleFileUpload(file, 'videos', 'lesson.videoUrl')}
+                uploadProgress={uploadProgress['lesson.videoUrl']}
+                showMediaLibrary={() => openMediaLibrary('videos', 'lesson.videoUrl')}
+              />
             )}
 
             {lessonForm.type === 'document' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  URL Tài liệu *
-                </label>
-                <input
-                  type="url"
-                  value={lessonForm.documentUrl}
-                  onChange={(e) => setLessonForm({...lessonForm, documentUrl: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="https://example.com/document.pdf"
-                />
-              </div>
+              <FileUploadField
+                label="Tài liệu bài học"
+                value={lessonForm.documentUrl}
+                onChange={(url) => setLessonForm({...lessonForm, documentUrl: url})}
+                type="documents"
+                placeholder="URL tài liệu bài học"
+                onUpload={(file) => handleFileUpload(file, 'documents', 'lesson.documentUrl')}
+                uploadProgress={uploadProgress['lesson.documentUrl']}
+                showMediaLibrary={() => openMediaLibrary('documents', 'lesson.documentUrl')}
+              />
             )}
 
             <div>
@@ -1367,10 +1544,17 @@ const DashboardAdmin: React.FC = () => {
 
       {/* Modal */}
       {renderModal()}
+
+      {/* Media Library */}
+      <MediaLibrary
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        onSelectFile={handleMediaSelect}
+        fileType={mediaLibraryType}
+        allowMultiple={false}
+      />
     </div>
   );
 };
 
 export default DashboardAdmin;
-
-export default DashboardAdmin

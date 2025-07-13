@@ -45,4 +45,25 @@ router.post('/images',
   UploadController.uploadMultipleImages
 );
 
+// Get upload statistics (Admin only)
+router.get('/stats',
+  authenticateToken,
+  requireAdmin,
+  UploadController.getUploadStats
+);
+
+// Get media library with pagination and filtering (Admin only)
+router.get('/media',
+  authenticateToken,
+  requireAdmin,
+  UploadController.getMediaLibrary
+);
+
+// Delete file from media library (Admin only)
+router.delete('/media/:type/:filename',
+  authenticateToken,
+  requireAdmin,
+  UploadController.deleteFile
+);
+
 module.exports = router;
