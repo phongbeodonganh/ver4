@@ -1,6 +1,43 @@
 const { body, validationResult } = require('express-validator');
 const { executeQuery } = require('../config/database');
 
+// Helper function to generate slug from title
+const generateSlug = (title) => {
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .trim('-'); // Remove leading/trailing hyphens
+};
+
+// Helper function to ensure unique slug
+const ensureUniqueSlug = async (baseSlug, excludeId = null) => {
+  let slug = baseSlug;
+  let counter = 1;
+  
+  while (true) {
+    let query = 'SELECT IDBlog FROM Blog WHERE Slug = ?';
+    let params = [slug];
+    
+    if (excludeId) {
+      query += ' AND IDBlog != ?';
+      params.push(excludeId);
+    }
+    
+    const existing = await executeQuery(query, params);
+    
+    if (existing.length === 0) {
+      return slug;
+    }
+    
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
+};
+
 class BlogController {
   // Lấy danh sách blog với phân trang và filter
   static async getAllBlogs(req, res) {

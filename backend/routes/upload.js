@@ -4,6 +4,7 @@ const { authenticateToken, requireAdmin } = require('../middlewares/authJwt');
 const { uploadImage, uploadVideo, uploadDocument, handleUploadError } = require('../middlewares/upload');
 
 const router = express.Router();
+router.get('/stats', authMiddleware, uploadController.getUploadStats);
 
 // Upload single image (Admin only)
 router.post('/image',

@@ -70,17 +70,22 @@ CREATE TABLE BaiHoc (
     FOREIGN KEY (IDCH) REFERENCES ChuongHoc(IDCH) ON DELETE CASCADE
 );
 
--- Bảng Video
+-- Bảng Video (Enhanced)
 CREATE TABLE Video (
     IDVideo INT PRIMARY KEY AUTO_INCREMENT,
     IDBH INT NOT NULL,
     video_480p_path VARCHAR(500),
     video_720p_path VARCHAR(500),
     video_1080p_path VARCHAR(500),
+    video_original_path VARCHAR(500),
     duration INT DEFAULT 0,
     file_size BIGINT DEFAULT 0,
+    processing_status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
     upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_date TIMESTAMP NULL,
+    thumbnail_path VARCHAR(500),
     INDEX idx_baihoc (IDBH),
+    INDEX idx_status (processing_status),
     FOREIGN KEY (IDBH) REFERENCES BaiHoc(IDBH) ON DELETE CASCADE
 );
 
@@ -189,6 +194,81 @@ CREATE TABLE DanhGiaKhoaHoc (
     UNIQUE KEY unique_rating (IDHV, IDKH)
 );
 
+-- Bảng Tin tức (Enhanced News System)
+CREATE TABLE TinTuc (
+    IDTinTuc INT PRIMARY KEY AUTO_INCREMENT,
+    TieuDe VARCHAR(300) NOT NULL,
+    NoiDung LONGTEXT NOT NULL,
+    TomTat TEXT,
+    LoaiNoiDung ENUM('text', 'image', 'video') DEFAULT 'text',
+    Thumbnail VARCHAR(500),
+    MediaUrl VARCHAR(500),
+    TacGia VARCHAR(100) NOT NULL,
+    NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    NgayCapNhat TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    TrangThai ENUM('draft', 'published', 'archived') DEFAULT 'draft',
+    HienThi ENUM('public', 'private') DEFAULT 'public',
+    LuotXem INT DEFAULT 0,
+    NoiBat BOOLEAN DEFAULT FALSE,
+    Slug VARCHAR(500) UNIQUE,
+    Tags JSON,
+    SEO JSON,
+    INDEX idx_trangthai (TrangThai),
+    INDEX idx_hienthi (HienThi),
+    INDEX idx_noibat (NoiBat),
+    INDEX idx_loai (LoaiNoiDung),
+    INDEX idx_ngaytao (NgayTao),
+    INDEX idx_slug (Slug)
+);
+
+-- Bảng Media Library (Thư viện Media dùng chung)
+CREATE TABLE MediaLibrary (
+    IDMedia INT PRIMARY KEY AUTO_INCREMENT,
+    TenFile VARCHAR(255) NOT NULL,
+    TenGoc VARCHAR(255) NOT NULL,
+    LoaiFile ENUM('image', 'video', 'document', 'audio') NOT NULL,
+    DuongDan VARCHAR(500) NOT NULL,
+    Url VARCHAR(500) NOT NULL,
+    KichThuoc BIGINT DEFAULT 0,
+    MimeType VARCHAR(100),
+    Thumbnail VARCHAR(500),
+    MoTa TEXT,
+    Tags JSON,
+    ThuMuc VARCHAR(100) DEFAULT 'general',
+    NguoiTao INT,
+    NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    NgayCapNhat TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    LuotSuDung INT DEFAULT 0,
+    TrangThai ENUM('active', 'inactive') DEFAULT 'active',
+    INDEX idx_loai (LoaiFile),
+    INDEX idx_thumuc (ThuMuc),
+    INDEX idx_nguoitao (NguoiTao),
+    INDEX idx_ngaytao (NgayTao),
+    INDEX idx_trangthai (TrangThai),
+    FOREIGN KEY (NguoiTao) REFERENCES HocVien(IDHV) ON DELETE SET NULL
+);
+
+-- Bảng Admin Logs (Nhật ký hoạt động Admin)
+CREATE TABLE AdminLogs (
+    IDLog INT PRIMARY KEY AUTO_INCREMENT,
+    IDAdmin INT NOT NULL,
+    HanhDong VARCHAR(100) NOT NULL,
+    DoiTuong VARCHAR(50) NOT NULL,
+    IDDoiTuong INT,
+    ChiTiet JSON,
+    IPAddress VARCHAR(45),
+    UserAgent TEXT,
+    NgayThucHien TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KetQua ENUM('success', 'failed', 'warning') DEFAULT 'success',
+    GhiChu TEXT,
+    INDEX idx_admin (IDAdmin),
+    INDEX idx_hanhdong (HanhDong),
+    INDEX idx_doituong (DoiTuong),
+    INDEX idx_ngay (NgayThucHien),
+    INDEX idx_ketqua (KetQua),
+    FOREIGN KEY (IDAdmin) REFERENCES HocVien(IDHV) ON DELETE CASCADE
+);
+
 -- Thêm dữ liệu mẫu
 
 -- Nhân viên sale mẫu
@@ -234,10 +314,28 @@ INSERT INTO Documents (title, description, file_url, file_name, file_size, tags,
 -- Website Settings mẫu
 INSERT INTO WebsiteSettings (setting_key, setting_value, description, updated_by) VALUES
 ('site_info', '{"siteName": "LinhMai Academy", "tagline": "Nền tảng học tập trực tuyến hàng đầu", "description": "Học lập trình và thiết kế web chuyên nghiệp"}', 'Thông tin cơ bản của website', 1),
-('branding', '{"logo": "", "favicon": "", "primaryColor": "#3B82F6", "secondaryColor": "#10B981"}', 'Thương hiệu và màu sắc', 1),
+('branding', '{"logo": "", "favicon": "", "primaryColor": "#3B82F6", "secondaryColor": "#10B981", "fontFamily": "Inter"}', 'Thương hiệu và màu sắc', 1),
 ('contact_info', '{"email": "contact@linhmai.edu.vn", "phone": "0123456789", "address": "123 Đường ABC, Quận XYZ, TP.HCM"}', 'Thông tin liên hệ', 1),
 ('social_links', '{"facebook": "", "youtube": "", "tiktok": "", "zalo": ""}', 'Liên kết mạng xã hội', 1),
 ('seo_settings', '{"googleAnalytics": "", "facebookPixel": "", "metaTitle": "LinhMai Academy", "metaDescription": "Học lập trình chuyên nghiệp"}', 'Cài đặt SEO và Analytics', 1);
+
+-- Tin tức mẫu
+INSERT INTO TinTuc (TieuDe, NoiDung, TomTat, LoaiNoiDung, Thumbnail, TacGia, TrangThai, HienThi, NoiBat, Tags, SEO, Slug) VALUES
+('Khai giảng khóa học React 2024', 'LinhMai Academy chính thức khai giảng khóa học React Development từ cơ bản đến nâng cao. Khóa học được thiết kế dành cho những ai muốn trở thành Frontend Developer chuyên nghiệp...', 'Thông báo khai giảng khóa học React mới nhất', 'text', 'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg', 'LinhMai Academy', 'published', 'public', TRUE, '["react", "khai-giang", "2024"]', '{"keywords": ["react", "khóa học", "lập trình"], "description": "Khai giảng khóa học React 2024"}', 'khai-giang-khoa-hoc-react-2024'),
+('Video: Hướng dẫn cài đặt môi trường lập trình', 'Video hướng dẫn chi tiết cách cài đặt môi trường lập trình cho người mới bắt đầu...', 'Video hướng dẫn cài đặt môi trường', 'video', 'https://images.pexels.com/photos/574077/pexels-photo-574077.jpeg', 'LinhMai Academy', 'published', 'public', FALSE, '["video", "huong-dan", "moi-truong"]', '{"keywords": ["video", "hướng dẫn", "môi trường"], "description": "Video hướng dẫn cài đặt"}', 'video-huong-dan-cai-dat-moi-truong'),
+('Infographic: Roadmap học lập trình 2024', 'Infographic chi tiết về lộ trình học lập trình hiệu quả trong năm 2024...', 'Lộ trình học lập trình 2024', 'image', 'https://images.pexels.com/photos/196644/pexels-photo-196644.jpeg', 'LinhMai Academy', 'published', 'public', TRUE, '["roadmap", "lap-trinh", "2024"]', '{"keywords": ["roadmap", "lập trình", "2024"], "description": "Lộ trình học lập trình"}', 'roadmap-hoc-lap-trinh-2024');
+
+-- Media Library mẫu
+INSERT INTO MediaLibrary (TenFile, TenGoc, LoaiFile, DuongDan, Url, KichThuoc, MimeType, Thumbnail, MoTa, Tags, ThuMuc, NguoiTao) VALUES
+('react-banner.jpg', 'react-course-banner.jpg', 'image', '/uploads/media/react-banner.jpg', 'https://linhmai.edu.vn/uploads/media/react-banner.jpg', 245760, 'image/jpeg', 'https://linhmai.edu.vn/uploads/media/thumbs/react-banner.jpg', 'Banner khóa học React', '["react", "banner", "course"]', 'courses', 1),
+('js-tutorial-video.mp4', 'javascript-tutorial-intro.mp4', 'video', '/uploads/media/js-tutorial-video.mp4', 'https://linhmai.edu.vn/uploads/media/js-tutorial-video.mp4', 15728640, 'video/mp4', 'https://linhmai.edu.vn/uploads/media/thumbs/js-tutorial-video.jpg', 'Video giới thiệu JavaScript', '["javascript", "tutorial", "video"]', 'tutorials', 1),
+('web-design-guide.pdf', 'complete-web-design-guide.pdf', 'document', '/uploads/media/web-design-guide.pdf', 'https://linhmai.edu.vn/uploads/media/web-design-guide.pdf', 2097152, 'application/pdf', 'https://linhmai.edu.vn/uploads/media/thumbs/web-design-guide.jpg', 'Tài liệu hướng dẫn thiết kế web', '["web-design", "guide", "pdf"]', 'documents', 1);
+
+-- Admin Logs mẫu
+INSERT INTO AdminLogs (IDAdmin, HanhDong, DoiTuong, IDDoiTuong, ChiTiet, IPAddress, UserAgent, KetQua, GhiChu) VALUES
+(1, 'CREATE', 'KhoaHoc', 1, '{"action": "create_course", "course_name": "React Development", "price": 299000}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'success', 'Tạo khóa học React thành công'),
+(1, 'UPDATE', 'TinTuc', 1, '{"action": "update_news", "title": "Khai giảng khóa học React 2024", "status": "published"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'success', 'Cập nhật tin tức thành công'),
+(1, 'UPLOAD', 'MediaLibrary', 1, '{"action": "upload_media", "file_name": "react-banner.jpg", "file_size": 245760}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'success', 'Upload media thành công');
 
 -- Tạo indexes để tối ưu performance
 CREATE INDEX idx_hocvien_email ON HocVien(Email);
@@ -258,6 +356,73 @@ FROM KhoaHoc kh
 LEFT JOIN GiaoDichKhoaHoc gd ON kh.IDKH = gd.IDKH AND gd.TrangThaiTT = 'completed'
 LEFT JOIN DanhGiaKhoaHoc dg ON kh.IDKH = dg.IDKH
 GROUP BY kh.IDKH, kh.TenKH, kh.GiaKH;
+
+-- View thống kê Media Library
+CREATE VIEW ThongKeMedia AS
+SELECT 
+    LoaiFile,
+    COUNT(*) as SoLuong,
+    SUM(KichThuoc) as TongDungLuong,
+    AVG(KichThuoc) as DungLuongTrungBinh,
+    SUM(LuotSuDung) as TongLuotSuDung
+FROM MediaLibrary 
+WHERE TrangThai = 'active'
+GROUP BY LoaiFile;
+
+-- View thống kê Admin Logs
+CREATE VIEW ThongKeAdminLogs AS
+SELECT 
+    DATE(NgayThucHien) as Ngay,
+    HanhDong,
+    COUNT(*) as SoLan,
+    COUNT(DISTINCT IDAdmin) as SoAdmin
+FROM AdminLogs
+WHERE NgayThucHien >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+GROUP BY DATE(NgayThucHien), HanhDong
+ORDER BY Ngay DESC, SoLan DESC;
+
+-- View thống kê tin tức
+CREATE VIEW ThongKeTinTuc AS
+SELECT 
+    LoaiNoiDung,
+    TrangThai,
+    COUNT(*) as SoLuong,
+    SUM(LuotXem) as TongLuotXem,
+    AVG(LuotXem) as LuotXemTrungBinh
+FROM TinTuc
+GROUP BY LoaiNoiDung, TrangThai;
+
+-- Bảng Video Processing Jobs (Xử lý video bất đồng bộ)
+CREATE TABLE VideoProcessingJobs (
+    IDJob INT PRIMARY KEY AUTO_INCREMENT,
+    job_id VARCHAR(36) UNIQUE NOT NULL,
+    lesson_id INT NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    original_path VARCHAR(500) NOT NULL,
+    file_size BIGINT NOT NULL,
+    status ENUM('pending', 'processing', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+    progress INT DEFAULT 0,
+    processed_urls JSON,
+    video_id INT,
+    error_message TEXT,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+    failed_at TIMESTAMP NULL,
+    cancelled_at TIMESTAMP NULL,
+    INDEX idx_job_id (job_id),
+    INDEX idx_lesson_id (lesson_id),
+    INDEX idx_status (status),
+    INDEX idx_created_by (created_by),
+    INDEX idx_created_at (created_at),
+    FOREIGN KEY (lesson_id) REFERENCES BaiHoc(IDBH) ON DELETE CASCADE,
+    FOREIGN KEY (video_id) REFERENCES Video(IDVideo) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES HocVien(IDHV) ON DELETE CASCADE
+);
+
+-- Thêm cột SoDienThoai vào bảng HocVien nếu chưa có
+ALTER TABLE HocVien ADD COLUMN IF NOT EXISTS SoDienThoai VARCHAR(20);
 
 -- Tạo stored procedure tính tiến độ học
 DELIMITER //

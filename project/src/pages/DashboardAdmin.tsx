@@ -1,21 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { 
   Users, BookOpen, DollarSign, TrendingUp, Award, 
-  Calendar, Eye, Settings, Plus, Edit, Trash2, ChevronDown,
-  ChevronRight, Play, FileText, Upload, Palette, Image, Video
+  Settings, Plus, ChevronDown, ChevronRight, Play, FileText, 
+  Palette, Image, Globe, Type, MessageCircle, Phone, Mail, MapPin,
+  Youtube, Facebook, Trash2
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
-import FileUpload from '../components/common/FileUpload';
-import MediaLibrary from '../components/admin/MediaLibrary';
 import FileUploadField from '../components/admin/FileUploadField';
-import uploadService from '../services/upload';
-import settingsService from '../services/settings';
+import MediaLibrary from '../components/admin/MediaLibrary';
+
+// Mock upload and settings functions
+const uploadFile = async (file: File, type: string, onProgress: (progress: number) => void) => {
+  // Simulate upload progress
+  for (let i = 0; i <= 100; i += 10) {
+    onProgress(i);
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return { url: `https://example.com/${type}/${file.name}` };
+};
+
+const getSettings = async () => {
+  return {};
+};
+
+const updateSettings = async (settings: any) => {
+  console.log('Settings updated:', settings);
+};
 
 interface Course {
   id: string;
@@ -46,17 +61,55 @@ interface Lesson {
   isFree: boolean;
 }
 
+interface WebsiteSettings {
+  siteName: string;
+  logo: string;
+  favicon: string;
+  primaryColor: string;
+  secondaryColor: string;
+  bannerImage: string;
+  backgroundImage: string;
+  headerText: string;
+  footerText: string;
+  seoTitle: string;
+  seoDescription: string;
+  fontFamily: string;
+  fontSize: string;
+  socialLinks: {
+    youtube: string;
+    facebook: string;
+    tiktok: string;
+    zalo: string;
+  };
+  contactInfo: {
+    phone: string;
+    email: string;
+    address: string;
+  };
+  googleAnalytics: string;
+  facebookPixel: string;
+  bannerSlides: Array<{
+    id: string;
+    image: string;
+    title: string;
+    description: string;
+    link: string;
+  }>;
+}
+
 const DashboardAdmin: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'course' | 'chapter' | 'lesson' | 'user' | 'staff'>('course');
+  const [modalType, setModalType] = useState<'course' | 'chapter' | 'lesson' | 'user' | 'staff' | 'banner'>('course');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+
+  // Upload states
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
-  const [mediaLibraryType, setMediaLibraryType] = useState<'images' | 'videos' | 'documents' | 'all'>('all');
+  const [mediaLibraryType, setMediaLibraryType] = useState<'images' | 'videos' | 'documents'>('images');
   const [currentUploadField, setCurrentUploadField] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
 
@@ -85,128 +138,41 @@ const DashboardAdmin: React.FC = () => {
     isFree: false
   });
 
-  // Upload states
-  const [uploadStates, setUploadStates] = useState({
-    video: { uploading: false, progress: 0, error: null },
-    image: { uploading: false, progress: 0, error: null },
-    document: { uploading: false, progress: 0, error: null }
+  const [bannerForm, setBannerForm] = useState({
+    title: '',
+    description: '',
+    image: '',
+    link: ''
   });
 
-  // File upload handlers
-  const handleVideoUpload = async (file: File) => {
-    setUploadStates(prev => ({
-      ...prev,
-      video: { uploading: true, progress: 0, error: null }
-    }));
-
-    const formData = new FormData();
-    formData.append('video', file);
-
-    try {
-      const response = await fetch('http://localhost:3000/api/uploads/video', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setLessonForm(prev => ({
-          ...prev,
-          videoUrl: result.data.url
-        }));
-        setUploadStates(prev => ({
-          ...prev,
-          video: { uploading: false, progress: 100, error: null }
-        }));
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error: any) {
-      setUploadStates(prev => ({
-        ...prev,
-        video: { uploading: false, progress: 0, error: error.message }
-      }));
-    }
-  };
-
-  const handleImageUpload = async (file: File, field: string) => {
-    setUploadStates(prev => ({
-      ...prev,
-      image: { uploading: true, progress: 0, error: null }
-    }));
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-      const response = await fetch('http://localhost:3000/api/uploads/image', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        if (field === 'courseThumbnail') {
-          setCourseForm(prev => ({
-            ...prev,
-            thumbnail: result.data.url
-          }));
-        } else if (field === 'bannerImage') {
-          setWebsiteSettings(prev => ({
-            ...prev,
-            bannerImage: result.data.url
-          }));
-        } else if (field === 'logo') {
-          setWebsiteSettings(prev => ({
-            ...prev,
-            logo: result.data.url
-          }));
-        }
-        
-        setUploadStates(prev => ({
-          ...prev,
-          image: { uploading: false, progress: 100, error: null }
-        }));
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error: any) {
-      setUploadStates(prev => ({
-        ...prev,
-        image: { uploading: false, progress: 0, error: error.message }
-      }));
-    }
-  };
-
-  const [userForm, setUserForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    course: ''
-  });
-
-  const [websiteSettings, setWebsiteSettings] = useState({
+  const [websiteSettings, setWebsiteSettings] = useState<WebsiteSettings>({
+    siteName: 'LinhMai Academy',
     logo: '',
+    favicon: '',
     primaryColor: '#3B82F6',
     secondaryColor: '#10B981',
     bannerImage: '',
-    siteName: 'EduPlatform',
+    backgroundImage: '',
     headerText: 'Nền tảng học tập trực tuyến hàng đầu',
     footerText: 'Tất cả quyền được bảo lưu.',
+    seoTitle: 'LinhMai Academy - Học tập trực tuyến',
+    seoDescription: 'Nền tảng học tập trực tuyến với các khóa học chất lượng cao',
+    fontFamily: 'Inter',
+    fontSize: '16px',
     socialLinks: {
       youtube: '',
       facebook: '',
       tiktok: '',
       zalo: ''
-    }
+    },
+    contactInfo: {
+      phone: '',
+      email: '',
+      address: ''
+    },
+    googleAnalytics: '',
+    facebookPixel: '',
+    bannerSlides: []
   });
 
   // Mock data
@@ -233,16 +199,6 @@ const DashboardAdmin: React.FC = () => {
               duration: 600,
               order: 1,
               isFree: true
-            },
-            {
-              id: '2',
-              title: 'Cài đặt môi trường',
-              description: 'Hướng dẫn cài đặt Node.js và React',
-              type: 'video',
-              videoUrl: 'https://example.com/video2.mp4',
-              duration: 900,
-              order: 2,
-              isFree: false
             }
           ]
         }
@@ -250,29 +206,186 @@ const DashboardAdmin: React.FC = () => {
     }
   ]);
 
-  const revenueData = [
-    { month: 'Jan', revenue: 4000000 },
-    { month: 'Feb', revenue: 3000000 },
-    { month: 'Mar', revenue: 5000000 },
-    { month: 'Apr', revenue: 4500000 },
-    { month: 'May', revenue: 6000000 },
-    { month: 'Jun', revenue: 5500000 },
+  const fontOptions = [
+    { value: 'Inter', label: 'Inter' },
+    { value: 'Roboto', label: 'Roboto' },
+    { value: 'Open Sans', label: 'Open Sans' },
+    { value: 'Lato', label: 'Lato' },
+    { value: 'Montserrat', label: 'Montserrat' },
+    { value: 'Poppins', label: 'Poppins' }
   ];
 
-  const courseData = [
-    { name: 'React Development', students: 250, color: '#3B82F6' },
-    { name: 'JavaScript Mastery', students: 180, color: '#10B981' },
-    { name: 'Web Design', students: 120, color: '#F59E0B' },
-    { name: 'Node.js Backend', students: 90, color: '#EF4444' },
-  ];
+  // Load settings on component mount
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
-  const staffData = [
-    { name: 'Nguyễn Văn A', students: 45, revenue: 13500000, conversion: 85 },
-    { name: 'Trần Thị B', students: 38, revenue: 11400000, conversion: 78 },
-    { name: 'Lê Văn C', students: 32, revenue: 9600000, conversion: 72 },
-    { name: 'Phạm Thị D', students: 28, revenue: 8400000, conversion: 65 },
-  ];
+  const loadSettings = async () => {
+    try {
+      const settings = await getSettings();
+      if (settings) {
+        setWebsiteSettings(prev => ({ ...prev, ...settings }));
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
 
+  const saveSettings = async () => {
+    try {
+      await updateSettings(websiteSettings);
+      alert('Cài đặt đã được lưu thành công!');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      alert('Có lỗi xảy ra khi lưu cài đặt!');
+    }
+  };
+
+  // Upload handlers
+  const handleFileUpload = async (file: File, type: 'images' | 'videos' | 'documents', fieldKey: string) => {
+    try {
+      setUploadProgress(prev => ({ ...prev, [fieldKey]: 0 }));
+      
+      const result = await uploadFile(file, type, (progress: number) => {
+        setUploadProgress(prev => ({ ...prev, [fieldKey]: progress }));
+      });
+      
+      // Update the appropriate form field
+      updateFormField(fieldKey, result.url);
+      setUploadProgress(prev => ({ ...prev, [fieldKey]: 100 }));
+      
+      setTimeout(() => {
+        setUploadProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[fieldKey];
+          return newProgress;
+        });
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[fieldKey];
+        return newProgress;
+      });
+    }
+  };
+
+  const updateFormField = (fieldKey: string, url: string) => {
+    const [form, field] = fieldKey.split('.');
+    
+    switch (form) {
+      case 'course':
+        setCourseForm(prev => ({ ...prev, [field]: url }));
+        break;
+      case 'lesson':
+        setLessonForm(prev => ({ ...prev, [field]: url }));
+        break;
+      case 'settings':
+        if (field.includes('.')) {
+          const [section, subField] = field.split('.');
+          setWebsiteSettings(prev => ({
+            ...prev,
+            [section]: { 
+              ...(prev[section as keyof WebsiteSettings] as any), 
+              [subField]: url 
+            }
+          }));
+        } else {
+          setWebsiteSettings(prev => ({ ...prev, [field]: url }));
+        }
+        break;
+      case 'banner':
+        setBannerForm(prev => ({ ...prev, [field]: url }));
+        break;
+    }
+  };
+
+  const openMediaLibrary = (type: 'images' | 'videos' | 'documents', fieldKey: string) => {
+    setMediaLibraryType(type);
+    setCurrentUploadField(fieldKey);
+    setShowMediaLibrary(true);
+  };
+
+  const handleMediaSelect = (fileUrl: string) => {
+    updateFormField(currentUploadField, fileUrl);
+    setShowMediaLibrary(false);
+  };
+
+  // Modal handlers
+  const openModal = (type: 'course' | 'chapter' | 'lesson' | 'user' | 'staff' | 'banner', course?: Course, chapter?: Chapter) => {
+    setModalType(type);
+    setSelectedCourse(course || null);
+    setSelectedChapter(chapter || null);
+    setIsModalOpen(true);
+    
+    // Reset forms
+    if (type === 'course') {
+      setCourseForm({ title: '', description: '', price: '', thumbnail: '' });
+    } else if (type === 'chapter') {
+      setChapterForm({ title: '', description: '', order: '' });
+    } else if (type === 'lesson') {
+      setLessonForm({
+        title: '',
+        description: '',
+        type: 'video',
+        videoUrl: '',
+        documentUrl: '',
+        duration: '',
+        order: '',
+        isFree: false
+      });
+    } else if (type === 'banner') {
+      setBannerForm({ title: '', description: '', image: '', link: '' });
+    }
+  };
+
+  const addBannerSlide = () => {
+    const newSlide = {
+      id: Date.now().toString(),
+      title: bannerForm.title,
+      description: bannerForm.description,
+      image: bannerForm.image,
+      link: bannerForm.link
+    };
+    
+    setWebsiteSettings(prev => ({
+      ...prev,
+      bannerSlides: [...prev.bannerSlides, newSlide]
+    }));
+    
+    setIsModalOpen(false);
+  };
+
+  const removeBannerSlide = (slideId: string) => {
+    setWebsiteSettings(prev => ({
+      ...prev,
+      bannerSlides: prev.bannerSlides.filter(slide => slide.id !== slideId)
+    }));
+  };
+
+  const toggleCourseExpansion = (courseId: string) => {
+    const newExpanded = new Set(expandedCourses);
+    if (newExpanded.has(courseId)) {
+      newExpanded.delete(courseId);
+    } else {
+      newExpanded.add(courseId);
+    }
+    setExpandedCourses(newExpanded);
+  };
+
+  const toggleChapterExpansion = (chapterId: string) => {
+    const newExpanded = new Set(expandedChapters);
+    if (newExpanded.has(chapterId)) {
+      newExpanded.delete(chapterId);
+    } else {
+      newExpanded.add(chapterId);
+    }
+    setExpandedChapters(newExpanded);
+  };
+
+  // Stats data
   const stats = [
     { 
       title: 'Tổng doanh thu', 
@@ -304,200 +417,14 @@ const DashboardAdmin: React.FC = () => {
     },
   ];
 
-  const openModal = (type: 'course' | 'chapter' | 'lesson' | 'user' | 'staff', course?: Course, chapter?: Chapter) => {
-    setModalType(type);
-    setSelectedCourse(course || null);
-    setSelectedChapter(chapter || null);
-    setIsModalOpen(true);
-    
-    // Reset forms
-    if (type === 'course') {
-      setCourseForm({ title: '', description: '', price: '', thumbnail: '' });
-    } else if (type === 'chapter') {
-      setChapterForm({ title: '', description: '', order: '' });
-    } else if (type === 'lesson') {
-      setLessonForm({
-        title: '',
-        description: '',
-        type: 'video',
-        videoUrl: '',
-        documentUrl: '',
-        duration: '',
-        order: '',
-        isFree: false
-      });
-    } else if (type === 'user') {
-      setUserForm({ name: '', email: '', password: '', course: '' });
-    }
-  };
-
-  const toggleCourseExpansion = (courseId: string) => {
-    const newExpanded = new Set(expandedCourses);
-    if (newExpanded.has(courseId)) {
-      newExpanded.delete(courseId);
-    } else {
-      newExpanded.add(courseId);
-    }
-    setExpandedCourses(newExpanded);
-  };
-
-  const toggleChapterExpansion = (chapterId: string) => {
-    const newExpanded = new Set(expandedChapters);
-    if (newExpanded.has(chapterId)) {
-      newExpanded.delete(chapterId);
-    } else {
-      newExpanded.add(chapterId);
-    }
-    setExpandedChapters(newExpanded);
-  };
-
-  // Upload helper functions
-  const handleFileUpload = async (file: File, type: 'images' | 'videos' | 'documents', fieldName: string) => {
-    try {
-      setUploadProgress(prev => ({ ...prev, [fieldName]: 0 }));
-      
-      let result;
-      const onProgress = (progress: any) => {
-        setUploadProgress(prev => ({ ...prev, [fieldName]: progress.percentage }));
-      };
-
-      // Use the appropriate upload method based on type
-      switch (type) {
-        case 'images':
-          result = await uploadService.uploadImage(file, onProgress);
-          break;
-        case 'videos':
-          result = await uploadService.uploadVideo(file, onProgress);
-          break;
-        case 'documents':
-          result = await uploadService.uploadDocument(file, onProgress);
-          break;
-        default:
-          throw new Error('Invalid file type');
-      }
-
-      if (result.success) {
-        // Update the appropriate form field
-        updateFormField(fieldName, result.data.url);
-        setUploadProgress(prev => ({ ...prev, [fieldName]: 100 }));
-        
-        // Clear progress after 2 seconds
-        setTimeout(() => {
-          setUploadProgress(prev => {
-            const newProgress = { ...prev };
-            delete newProgress[fieldName];
-            return newProgress;
-          });
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      setUploadProgress(prev => {
-        const newProgress = { ...prev };
-        delete newProgress[fieldName];
-        return newProgress;
-      });
-    }
-  };
-
-  const updateFormField = (fieldName: string, value: string) => {
-    if (fieldName.startsWith('course.')) {
-      const field = fieldName.replace('course.', '');
-      setCourseForm(prev => ({ ...prev, [field]: value }));
-    } else if (fieldName.startsWith('lesson.')) {
-      const field = fieldName.replace('lesson.', '');
-      setLessonForm(prev => ({ ...prev, [field]: value }));
-    } else if (fieldName.startsWith('settings.')) {
-      const field = fieldName.replace('settings.', '');
-      setWebsiteSettings(prev => ({ ...prev, [field]: value }));
-    }
-  };
-
-  const openMediaLibrary = (type: 'images' | 'videos' | 'documents' | 'all', fieldName: string) => {
-    setMediaLibraryType(type);
-    setCurrentUploadField(fieldName);
-    setShowMediaLibrary(true);
-  };
-
-  const handleMediaSelect = (file: any) => {
-    updateFormField(currentUploadField, file.url);
-    setShowMediaLibrary(false);
-  };
-
-  const handleSaveCourse = () => {
-    const newCourse: Course = {
-      id: Date.now().toString(),
-      title: courseForm.title,
-      description: courseForm.description,
-      price: parseInt(courseForm.price),
-      thumbnail: courseForm.thumbnail,
-      chapters: []
-    };
-    setCourses([...courses, newCourse]);
-    setIsModalOpen(false);
-  };
-
-  const handleSaveChapter = () => {
-    if (!selectedCourse) return;
-    
-    const newChapter: Chapter = {
-      id: Date.now().toString(),
-      title: chapterForm.title,
-      description: chapterForm.description,
-      order: parseInt(chapterForm.order),
-      lessons: []
-    };
-
-    const updatedCourses = courses.map(course => {
-      if (course.id === selectedCourse.id) {
-        return {
-          ...course,
-          chapters: [...course.chapters, newChapter]
-        };
-      }
-      return course;
-    });
-
-    setCourses(updatedCourses);
-    setIsModalOpen(false);
-  };
-
-  const handleSaveLesson = () => {
-    if (!selectedCourse || !selectedChapter) return;
-
-    const newLesson: Lesson = {
-      id: Date.now().toString(),
-      title: lessonForm.title,
-      description: lessonForm.description,
-      type: lessonForm.type,
-      videoUrl: lessonForm.videoUrl,
-      documentUrl: lessonForm.documentUrl,
-      duration: parseInt(lessonForm.duration),
-      order: parseInt(lessonForm.order),
-      isFree: lessonForm.isFree
-    };
-
-    const updatedCourses = courses.map(course => {
-      if (course.id === selectedCourse.id) {
-        return {
-          ...course,
-          chapters: course.chapters.map(chapter => {
-            if (chapter.id === selectedChapter.id) {
-              return {
-                ...chapter,
-                lessons: [...chapter.lessons, newLesson]
-              };
-            }
-            return chapter;
-          })
-        };
-      }
-      return course;
-    });
-
-    setCourses(updatedCourses);
-    setIsModalOpen(false);
-  };
+  const revenueData = [
+    { month: 'Jan', revenue: 4000000 },
+    { month: 'Feb', revenue: 3000000 },
+    { month: 'Mar', revenue: 5000000 },
+    { month: 'Apr', revenue: 4500000 },
+    { month: 'May', revenue: 6000000 },
+    { month: 'Jun', revenue: 5500000 },
+  ];
 
   const renderDashboard = () => (
     <div className="space-y-6">
@@ -532,48 +459,6 @@ const DashboardAdmin: React.FC = () => {
               <Bar dataKey="revenue" fill="#3B82F6" />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Học viên theo khóa học</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={courseData}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                dataKey="students"
-                label={({ name, students }) => `${name}: ${students}`}
-              >
-                {courseData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Recent Activities */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Hoạt động gần đây</h3>
-        <div className="space-y-3">
-          {[
-            { activity: 'Nguyễn Văn A đăng ký khóa React Development', time: '2 phút trước' },
-            { activity: 'Trần Thị B hoàn thành bài học "State Management"', time: '15 phút trước' },
-            { activity: 'Lê Văn C gửi đánh giá 5 sao cho khóa JavaScript', time: '1 giờ trước' },
-            { activity: 'Phạm Thị D thanh toán khóa học Web Design', time: '2 giờ trước' },
-          ].map((item, index) => (
-            <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">{item.activity}</p>
-                <p className="text-xs text-gray-500">{item.time}</p>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -627,12 +512,6 @@ const DashboardAdmin: React.FC = () => {
                     >
                       Thêm chương
                     </Button>
-                    <button className="text-blue-600 hover:text-blue-900">
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button className="text-red-600 hover:text-red-900">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                 </div>
 
@@ -675,12 +554,6 @@ const DashboardAdmin: React.FC = () => {
                                 >
                                   Thêm bài học
                                 </Button>
-                                <button className="text-blue-600 hover:text-blue-900">
-                                  <Edit className="h-3 w-3" />
-                                </button>
-                                <button className="text-red-600 hover:text-red-900">
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
                               </div>
                             </div>
 
@@ -714,14 +587,6 @@ const DashboardAdmin: React.FC = () => {
                                             </div>
                                           </div>
                                         </div>
-                                        <div className="flex items-center space-x-2">
-                                          <button className="text-blue-600 hover:text-blue-900">
-                                            <Edit className="h-3 w-3" />
-                                          </button>
-                                          <button className="text-red-600 hover:text-red-900">
-                                            <Trash2 className="h-3 w-3" />
-                                          </button>
-                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -742,175 +607,14 @@ const DashboardAdmin: React.FC = () => {
     </div>
   );
 
-  const renderUsers = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Quản lý học viên</h2>
-        <Button
-          variant="primary"
-          icon={Plus}
-          onClick={() => openModal('user')}
-        >
-          Thêm học viên
-        </Button>
-      </div>
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Học viên
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Khóa học
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tiến độ
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {[
-              { name: 'Nguyễn Văn A', email: 'nguyenvana@email.com', course: 'React Development', progress: 75 },
-              { name: 'Trần Thị B', email: 'tranthib@email.com', course: 'JavaScript Mastery', progress: 60 },
-              { name: 'Lê Văn C', email: 'levanc@email.com', course: 'Web Design', progress: 90 },
-              { name: 'Phạm Thị D', email: 'phamthid@email.com', course: 'Node.js Backend', progress: 45 },
-            ].map((user, index) => (
-              <tr key={index}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{user.email}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{user.course}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-full bg-gray-200 rounded-full h-2 mr-3">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${user.progress}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-900">{user.progress}%</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <button className="text-blue-600 hover:text-blue-900">
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button className="text-red-600 hover:text-red-900">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderStaff = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Quản lý nhân viên Sale</h2>
-        <Button
-          variant="primary"
-          icon={Plus}
-          onClick={() => openModal('staff')}
-        >
-          Thêm nhân viên
-        </Button>
-      </div>
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nhân viên
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Học viên
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Doanh thu
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Chuyển đổi
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {staffData.map((staff, index) => (
-              <tr key={index}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-700">
-                        {staff.name.charAt(0)}
-                      </span>
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{staff.name}</div>
-                      {index === 0 && (
-                        <div className="flex items-center">
-                          <Award className="h-4 w-4 text-yellow-500 mr-1" />
-                          <span className="text-xs text-yellow-600">Top Performer</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{staff.students}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">
-                    {staff.revenue.toLocaleString('vi-VN')} VNĐ
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    staff.conversion >= 80 ? 'bg-green-100 text-green-800' :
-                    staff.conversion >= 70 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {staff.conversion}%
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <button className="text-blue-600 hover:text-blue-900">
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button className="text-red-600 hover:text-red-900">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   const renderSettings = () => (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Cài đặt website</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Cài đặt website</h2>
+        <Button variant="primary" onClick={saveSettings}>
+          Lưu tất cả thay đổi
+        </Button>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Branding Settings */}
@@ -932,18 +636,27 @@ const DashboardAdmin: React.FC = () => {
               />
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Logo URL
-              </label>
-              <input
-                type="url"
-                value={websiteSettings.logo}
-                onChange={(e) => setWebsiteSettings({...websiteSettings, logo: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://example.com/logo.png"
-              />
-            </div>
+            <FileUploadField
+              label="Logo website"
+              value={websiteSettings.logo}
+              onChange={(url) => setWebsiteSettings({...websiteSettings, logo: url})}
+              type="images"
+              placeholder="URL logo website"
+              onUpload={(file) => handleFileUpload(file, 'images', 'settings.logo')}
+              uploadProgress={uploadProgress['settings.logo']}
+              showMediaLibrary={() => openMediaLibrary('images', 'settings.logo')}
+            />
+
+            <FileUploadField
+              label="Favicon"
+              value={websiteSettings.favicon}
+              onChange={(url) => setWebsiteSettings({...websiteSettings, favicon: url})}
+              type="images"
+              placeholder="URL favicon (16x16px)"
+              onUpload={(file) => handleFileUpload(file, 'images', 'settings.favicon')}
+              uploadProgress={uploadProgress['settings.favicon']}
+              showMediaLibrary={() => openMediaLibrary('images', 'settings.favicon')}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -972,25 +685,23 @@ const DashboardAdmin: React.FC = () => {
           </div>
         </div>
 
-        {/* Content Settings */}
+        {/* Content & Images Settings */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Image className="h-5 w-5 mr-2" />
             Nội dung & Hình ảnh
           </h3>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ảnh banner chính
-              </label>
-              <input
-                type="url"
-                value={websiteSettings.bannerImage}
-                onChange={(e) => setWebsiteSettings({...websiteSettings, bannerImage: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://example.com/banner.jpg"
-              />
-            </div>
+            <FileUploadField
+              label="Ảnh nền toàn trang"
+              value={websiteSettings.backgroundImage}
+              onChange={(url) => setWebsiteSettings({...websiteSettings, backgroundImage: url})}
+              type="images"
+              placeholder="URL ảnh nền website"
+              onUpload={(file) => handleFileUpload(file, 'images', 'settings.backgroundImage')}
+              uploadProgress={uploadProgress['settings.backgroundImage']}
+              showMediaLibrary={() => openMediaLibrary('images', 'settings.backgroundImage')}
+            />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1018,543 +729,52 @@ const DashboardAdmin: React.FC = () => {
           </div>
         </div>
 
-        {/* Social Media Settings */}
+        {/* SEO Settings */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Mạng xã hội
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Globe className="h-5 w-5 mr-2" />
+            SEO & Meta Tags
           </h3>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                YouTube
-              </label>
-              <input
-                type="url"
-                value={websiteSettings.socialLinks.youtube}
-                onChange={(e) => setWebsiteSettings({
-                  ...websiteSettings,
-                  socialLinks: {...websiteSettings.socialLinks, youtube: e.target.value}
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://youtube.com/@channel"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Facebook
-              </label>
-              <input
-                type="url"
-                value={websiteSettings.socialLinks.facebook}
-                onChange={(e) => setWebsiteSettings({
-                  ...websiteSettings,
-                  socialLinks: {...websiteSettings.socialLinks, facebook: e.target.value}
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://facebook.com/page"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                TikTok
-              </label>
-              <input
-                type="url"
-                value={websiteSettings.socialLinks.tiktok}
-                onChange={(e) => setWebsiteSettings({
-                  ...websiteSettings,
-                  socialLinks: {...websiteSettings.socialLinks, tiktok: e.target.value}
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://tiktok.com/@username"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Zalo
+                Tiêu đề SEO
               </label>
               <input
                 type="text"
-                value={websiteSettings.socialLinks.zalo}
-                onChange={(e) => setWebsiteSettings({
-                  ...websiteSettings,
-                  socialLinks: {...websiteSettings.socialLinks, zalo: e.target.value}
-                })}
+                value={websiteSettings.seoTitle}
+                onChange={(e) => setWebsiteSettings({...websiteSettings, seoTitle: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Số điện thoại Zalo"
+                placeholder="Tiêu đề hiển thị trên Google"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mô tả SEO
+              </label>
+              <textarea
+                value={websiteSettings.seoDescription}
+                onChange={(e) => setWebsiteSettings({...websiteSettings, seoDescription: e.target.value})}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mô tả hiển thị trên Google (160 ký tự)"
               />
             </div>
           </div>
         </div>
 
-        {/* Preview */}
+        {/* Typography Settings */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Xem trước
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Type className="h-5 w-5 mr-2" />
+            Typography
           </h3>
-          <div className="border rounded-lg p-4 bg-gray-50">
-            <div className="flex items-center space-x-3 mb-3">
-              {websiteSettings.logo && (
-                <img src={websiteSettings.logo} alt="Logo" className="h-8 w-8 object-contain" />
-              )}
-              <span className="font-bold" style={{color: websiteSettings.primaryColor}}>
-                {websiteSettings.siteName}
-              </span>
-            </div>
-            <div className="text-sm text-gray-600 mb-2">
-              {websiteSettings.headerText}
-            </div>
-            {websiteSettings.bannerImage && (
-              <img 
-                src={websiteSettings.bannerImage} 
-                alt="Banner" 
-                className="w-full h-20 object-cover rounded mb-2"
-              />
-            )}
-            <div className="text-xs text-gray-500">
-              {websiteSettings.footerText}
-            </div>
-          </div>
-          
-          <div className="mt-4">
-            <Button variant="primary" className="w-full">
-              Áp dụng thay đổi
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderModal = () => {
-    if (modalType === 'course') {
-      return (
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          title="Thêm khóa học mới"
-          maxWidth="lg"
-        >
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tên khóa học *
+                Font chữ
               </label>
-              <input
-                type="text"
-                value={courseForm.title}
-                onChange={(e) => setCourseForm({...courseForm, title: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập tên khóa học"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mô tả khóa học *
-              </label>
-              <textarea
-                value={courseForm.description}
-                onChange={(e) => setCourseForm({...courseForm, description: e.target.value})}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập mô tả khóa học"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Giá khóa học (VNĐ) *
-              </label>
-              <input
-                type="number"
-                value={courseForm.price}
-                onChange={(e) => setCourseForm({...courseForm, price: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập giá khóa học"
-              />
-            </div>
-
-            <FileUploadField
-              label="Ảnh thumbnail"
-              value={courseForm.thumbnail}
-              onChange={(url) => setCourseForm({...courseForm, thumbnail: url})}
-              type="images"
-              placeholder="URL ảnh thumbnail khóa học"
-              onUpload={(file) => handleFileUpload(file, 'images', 'course.thumbnail')}
-              uploadProgress={uploadProgress['course.thumbnail']}
-              showMediaLibrary={() => openMediaLibrary('images', 'course.thumbnail')}
-            />
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSaveCourse}
-              >
-                Tạo khóa học
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modalType === 'chapter') {
-      return (
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          title={`Thêm chương cho khóa học: ${selectedCourse?.title}`}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tên chương *
-              </label>
-              <input
-                type="text"
-                value={chapterForm.title}
-                onChange={(e) => setChapterForm({...chapterForm, title: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập tên chương"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mô tả chương
-              </label>
-              <textarea
-                value={chapterForm.description}
-                onChange={(e) => setChapterForm({...chapterForm, description: e.target.value})}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập mô tả chương"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Thứ tự chương *
-              </label>
-              <input
-                type="number"
-                value={chapterForm.order}
-                onChange={(e) => setChapterForm({...chapterForm, order: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập thứ tự chương"
-                min="1"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSaveChapter}
-              >
-                Tạo chương
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modalType === 'lesson') {
-      return (
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          title={`Thêm bài học cho chương: ${selectedChapter?.title}`}
-          maxWidth="lg"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tên bài học *
-              </label>
-              <input
-                type="text"
-                value={lessonForm.title}
-                onChange={(e) => setLessonForm({...lessonForm, title: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập tên bài học"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mô tả bài học
-              </label>
-              <textarea
-                value={lessonForm.description}
-                onChange={(e) => setLessonForm({...lessonForm, description: e.target.value})}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập mô tả bài học"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Loại bài học *
-                </label>
-                <select
-                  value={lessonForm.type}
-                  onChange={(e) => setLessonForm({...lessonForm, type: e.target.value as 'video' | 'document' | 'quiz'})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="video">Video</option>
-                  <option value="document">Tài liệu</option>
-                  <option value="quiz">Bài tập</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Thứ tự bài học *
-                </label>
-                <input
-                  type="number"
-                  value={lessonForm.order}
-                  onChange={(e) => setLessonForm({...lessonForm, order: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Thứ tự"
-                  min="1"
-                />
-              </div>
-            </div>
-
-            {lessonForm.type === 'video' && (
-              <FileUploadField
-                label="Video bài học"
-                value={lessonForm.videoUrl}
-                onChange={(url) => setLessonForm({...lessonForm, videoUrl: url})}
-                type="videos"
-                placeholder="URL video bài học"
-                onUpload={(file) => handleFileUpload(file, 'videos', 'lesson.videoUrl')}
-                uploadProgress={uploadProgress['lesson.videoUrl']}
-                showMediaLibrary={() => openMediaLibrary('videos', 'lesson.videoUrl')}
-              />
-            )}
-
-            {lessonForm.type === 'document' && (
-              <FileUploadField
-                label="Tài liệu bài học"
-                value={lessonForm.documentUrl}
-                onChange={(url) => setLessonForm({...lessonForm, documentUrl: url})}
-                type="documents"
-                placeholder="URL tài liệu bài học"
-                onUpload={(file) => handleFileUpload(file, 'documents', 'lesson.documentUrl')}
-                uploadProgress={uploadProgress['lesson.documentUrl']}
-                showMediaLibrary={() => openMediaLibrary('documents', 'lesson.documentUrl')}
-              />
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Thời lượng (giây) *
-              </label>
-              <input
-                type="number"
-                value={lessonForm.duration}
-                onChange={(e) => setLessonForm({...lessonForm, duration: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Thời lượng tính bằng giây"
-                min="1"
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isFree"
-                checked={lessonForm.isFree}
-                onChange={(e) => setLessonForm({...lessonForm, isFree: e.target.checked})}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="isFree" className="ml-2 block text-sm text-gray-900">
-                Đây là bài học miễn phí (demo)
-              </label>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSaveLesson}
-              >
-                Tạo bài học
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modalType === 'user') {
-      return (
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          title="Thêm học viên mới"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tên học viên *
-              </label>
-              <input
-                type="text"
-                value={userForm.name}
-                onChange={(e) => setUserForm({...userForm, name: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập tên học viên"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
-              </label>
-              <input
-                type="email"
-                value={userForm.email}
-                onChange={(e) => setUserForm({...userForm, email: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập email học viên"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mật khẩu *
-              </label>
-              <input
-                type="password"
-                value={userForm.password}
-                onChange={(e) => setUserForm({...userForm, password: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nhập mật khẩu cho tài khoản"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Khóa học được cấp quyền
-              </label>
-              <select 
-                value={userForm.course}
-                onChange={(e) => setUserForm({...userForm, course: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Chọn khóa học</option>
-                {courses.map(course => (
-                  <option key={course.id} value={course.id}>{course.title}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Tạo tài khoản
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    return null;
-  };
-
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-    { id: 'courses', label: 'Khóa học', icon: BookOpen },
-    { id: 'users', label: 'Học viên', icon: Users },
-    { id: 'staff', label: 'Nhân viên', icon: Award },
-    { id: 'settings', label: 'Cài đặt', icon: Settings },
-  ];
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-white shadow-lg">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-bold text-gray-900">Admin Dashboard</h2>
-          </div>
-          <nav className="mt-6">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center px-6 py-3 text-left transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <tab.icon className="h-5 w-5 mr-3" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 p-6">
-          {activeTab === 'dashboard' && renderDashboard()}
-          {activeTab === 'courses' && renderCourses()}
-          {activeTab === 'users' && renderUsers()}
-          {activeTab === 'staff' && renderStaff()}
-          {activeTab === 'settings' && renderSettings()}
-        </div>
-      </div>
-
-      {/* Modal */}
-      {renderModal()}
-
-      {/* Media Library */}
-      <MediaLibrary
-        isOpen={showMediaLibrary}
-        onClose={() => setShowMediaLibrary(false)}
-        onSelectFile={handleMediaSelect}
-        fileType={mediaLibraryType}
-        allowMultiple={false}
-      />
-    </div>
-  );
-};
-
-export default DashboardAdmin;
+              <select
+                value={websiteSettings.fontFamily}
+                onChange={(e) => setWebsiteSettings({...websiteSettings,

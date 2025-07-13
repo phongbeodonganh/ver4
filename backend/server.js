@@ -12,13 +12,21 @@ const { createUploadDirs } = require('./middlewares/upload');
 // Import routes
 const authRoutes = require('./routes/auth');
 const hocvienRoutes = require('./routes/hocvien');
+const enhancedHocvienRoutes = require('./routes/enhancedHocVien');
 const khoahocRoutes = require('./routes/khoahoc');
-const videoRoutes = require('./routes/video');
+const videoRoutes = require('./routes/enhancedVideo');
+const asyncVideoRoutes = require('./routes/asyncVideo');
 const giaodichRoutes = require('./routes/giaodich');
 const blogRoutes = require('./routes/blog');
 const uploadRoutes = require('./routes/upload');
 const settingsRoutes = require('./routes/settings');
 const newsRoutes = require('./routes/news');
+const enhancedNewsRoutes = require('./routes/enhancedNews');
+const documentRoutes = require('./routes/document');
+const documentsPublicRoutes = require('./routes/documentsPublic');
+const mediaRoutes = require('./routes/media');
+const adminLogsRoutes = require('./routes/adminLogs');
+const thongkeRoutes = require('./routes/thongke');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,29 +85,47 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/hocvien', hocvienRoutes);
+app.use('/api/hocvien/search', enhancedHocvienRoutes);
 app.use('/api/khoahoc', khoahocRoutes);
 app.use('/api/video', videoRoutes);
+app.use('/api/video/async', asyncVideoRoutes);
 app.use('/api/giaodich', giaodichRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/news', newsRoutes);
+app.use('/api/news/enhanced', enhancedNewsRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/api/documents/public', documentsPublicRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/logs/admin', adminLogsRoutes);
+app.use('/api/thongke', thongkeRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Chào mừng đến với LinhMai Academy API',
-    version: '1.0.0',
+    version: '2.0.0',
     documentation: '/api/docs',
     endpoints: {
       auth: '/api/auth',
       students: '/api/hocvien',
+      studentSearch: '/api/hocvien/search',
       courses: '/api/khoahoc',
       videos: '/api/video',
+      asyncVideos: '/api/video/async',
       transactions: '/api/giaodich',
       blog: '/api/blog',
-      uploads: '/api/uploads'
+      news: '/api/news',
+      enhancedNews: '/api/news/enhanced',
+      documents: '/api/documents',
+      publicDocuments: '/api/documents/public',
+      media: '/api/media',
+      adminLogs: '/api/logs/admin',
+      statistics: '/api/thongke',
+      uploads: '/api/uploads',
+      settings: '/api/settings'
     }
   });
 });

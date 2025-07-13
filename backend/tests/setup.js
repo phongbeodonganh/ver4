@@ -1,4 +1,3 @@
-// Jest setup file for test configuration
 const { executeQuery } = require('../config/database');
 
 // Global test setup
